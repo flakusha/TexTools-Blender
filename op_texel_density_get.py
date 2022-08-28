@@ -72,7 +72,7 @@ def get_texel_density(self, context, edit_mode, getmode):
 		object_faces = bm.faces
 
 	if not object_faces:
-		self.report({'INFO'}, "No UV maps or meshes selected" )
+		#self.report({'INFO'}, "No UV maps or meshes selected" )
 		return [0, 0]
 
 	if getmode == 'IMAGE':
@@ -81,7 +81,16 @@ def get_texel_density(self, context, edit_mode, getmode):
 		if not image:
 			self.report({'INFO'}, "No Texture found, assign Checker map or texture first" )
 			return [0, 0]
-		size = min(image.size[0], image.size[1])
+		if image.source =='TILED':
+			udim_tile, column, row = utilities_uv.get_UDIM_tile_coords(obj)
+			if udim_tile != 1001:
+				size = utilities_texel.get_tile_size(self, image, udim_tile)
+				if not size:
+					return [0, 0]
+			else:
+				size = min(image.size[0], image.size[1])
+		else:
+			size = min(image.size[0], image.size[1])
 
 	elif getmode == 'SIZE':
 		size = min(bpy.context.scene.texToolsSettings.size[0], bpy.context.scene.texToolsSettings.size[1])
