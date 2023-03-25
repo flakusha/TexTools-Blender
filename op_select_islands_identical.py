@@ -13,13 +13,13 @@ class op(bpy.types.Operator):
 
 	@classmethod
 	def poll(cls, context):
+		if bpy.context.area.ui_type != 'UV':
+			return False
 		if not bpy.context.active_object:
 			return False
 		if bpy.context.active_object.type != 'MESH':
 			return False
 		if bpy.context.active_object.mode != 'EDIT':
-			return False
-		if bpy.context.area.type != 'IMAGE_EDITOR':
 			return False
 		if not bpy.context.object.data.uv_layers:
 			return False
@@ -68,6 +68,7 @@ def island_find(self, context):
 
 
 def swap(self, context, island_stats_source):
+	selection_mode = bpy.context.scene.tool_settings.uv_select_mode
 	bm = bmesh.from_edit_mesh(bpy.context.active_object.data)
 	uv_layers = bm.loops.layers.uv.verify()
 
@@ -85,6 +86,9 @@ def swap(self, context, island_stats_source):
 			for loop in face.loops:
 				loop[uv_layers].select = True
 
+	# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
+	bpy.ops.uv.select_mode(type='VERTEX')
+	bpy.context.scene.tool_settings.uv_select_mode = selection_mode
 
 
 

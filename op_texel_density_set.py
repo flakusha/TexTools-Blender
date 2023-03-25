@@ -18,6 +18,8 @@ class op(bpy.types.Operator):
 	
 	@classmethod
 	def poll(cls, context):
+		if bpy.context.area.ui_type != 'UV':
+			return False
 		if not bpy.context.active_object:
 			return False
 		if bpy.context.object.mode != 'EDIT' and bpy.context.object.mode != 'OBJECT':
@@ -25,8 +27,6 @@ class op(bpy.types.Operator):
 		if bpy.context.object.mode == 'OBJECT' and len(bpy.context.selected_objects) == 0:
 			return False
 		if bpy.context.active_object.type != 'MESH':
-			return False
-		if bpy.context.area.type != 'IMAGE_EDITOR':
 			return False
 		if not bpy.context.object.data.uv_layers:
 			return False
@@ -56,6 +56,7 @@ def set_texel_density(self, context, edit_mode, getmode, setmode, density, udim_
 		return
 
 	bpy.ops.object.mode_set(mode='EDIT')
+	selection_mode = bpy.context.scene.tool_settings.uv_select_mode
 
 	me = bpy.context.active_object.data
 	bm = bmesh.from_edit_mesh(me)
@@ -182,6 +183,10 @@ def set_texel_density(self, context, edit_mode, getmode, setmode, density, udim_
 							loop[uv_layers].uv = loop[uv_layers].uv * scale
 
 	bmesh.update_edit_mesh(me, loop_triangles=False)
+
+	# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
+	bpy.ops.uv.select_mode(type='VERTEX')
+	bpy.context.scene.tool_settings.uv_select_mode = selection_mode
 
 	if is_sync:
 		bpy.context.scene.tool_settings.use_uv_select_sync = True

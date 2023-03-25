@@ -16,11 +16,11 @@ class op(bpy.types.Operator):
 
 	@classmethod
 	def poll(cls, context):
+		if bpy.context.area.ui_type != 'UV':
+			return False
 		if not bpy.context.active_object:
 			return False
 		if bpy.context.active_object.mode != 'EDIT':
-			return False
-		if bpy.context.area.type != 'IMAGE_EDITOR':
 			return False
 		if not bpy.context.object.data.uv_layers:
 			return False
@@ -132,6 +132,10 @@ def align(context, align_mode, direction, boundsAll={}, column=0, row=0):
 			else:
 				print("Unknown direction: "+str(direction))
 
+		# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
+		# Not fully working though
+		bpy.ops.uv.select_mode(type='VERTEX')
+		bpy.context.scene.tool_settings.uv_select_mode = selection_mode
 
 	else:	# Vertices or Edges UV selection mode
 		for f in bm.faces:

@@ -107,7 +107,11 @@ class op(bpy.types.Operator):
 							if slot.material.use_nodes == False:
 								settings.bake_error = "Nodal materials needed"
 								return False
-							if 'Principled BSDF' not in slot.material.node_tree.nodes:
+							bsdf_node = None
+							for n in slot.material.node_tree.nodes:
+								if n.bl_idname == "ShaderNodeBsdfPrincipled":
+									bsdf_node = n
+							if not bsdf_node:
 								bool_alpha_ignore = bpy.context.preferences.addons[__package__].preferences.bool_alpha_ignore
 								bool_clean_transmission = bpy.context.preferences.addons[__package__].preferences.bool_clean_transmission
 								builtin_modes_material = {'diffuse','emission','roughness','glossiness','transmission'}
@@ -156,6 +160,7 @@ class op(bpy.types.Operator):
 		startTime = time.monotonic()
 		preferences = bpy.context.preferences.addons[__package__].preferences
 		circular_report = [False, ]
+		color_report = [False, ]
 
 		if preferences.bool_clean_transmission:
 			modes['transmission']=		ub.BakeMode('',			type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':7, 'n':15})
@@ -202,6 +207,7 @@ class op(bpy.types.Operator):
 			cage_extrusion = bpy.context.scene.texToolsSettings.bake_cage_extrusion,
 			ray_distance = bpy.context.scene.texToolsSettings.bake_ray_distance,
 			circular_report = circular_report,
+			color_report = color_report,
 			selected = selected_objects,
 			active = active_object,
 			pre_selection_mode = pre_selection_mode
@@ -209,15 +215,21 @@ class op(bpy.types.Operator):
 
 		elapsed = round(time.monotonic()-startTime, 2)
 		if circular_report[0]:
-			self.report({'WARNING'}, "Possible Circular Dependency: a previously baked image may have affected the new bake. Baking finished in " + str(elapsed) + "s.")
+			if color_report[0]:
+				self.report({'WARNING'}, "Possible Circular Dependency: a previously baked image may have affected the new bake; " + color_report[0] + "Baking finished in " + str(elapsed) + "s.")
+			else:
+				self.report({'WARNING'}, "Possible Circular Dependency: a previously baked image may have affected the new bake. Baking finished in " + str(elapsed) + "s.")
 		else:
-			self.report({'INFO'}, "Baking finished in " + str(elapsed) + "s.")
+			if color_report[0]:
+				self.report({'WARNING'}, color_report[0] + ". Baking finished in " + str(elapsed) + "s.")
+			else:
+				self.report({'INFO'}, "Baking finished in " + str(elapsed) + "s.")
 
 		return {'FINISHED'}
 
 
 
-def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion, ray_distance, circular_report, selected, active, pre_selection_mode):
+def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion, ray_distance, circular_report, color_report, selected, active, pre_selection_mode):
 	print("Bake '{}'".format(mode))
 
 	# Get the baking sets / pairs
@@ -348,9 +360,9 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 			if is_clear:
 				bakeReadyMaterials = []
 				if material_loaded is None:
-					image, previous_image = setup_image(mode, name_texture, render_width, render_height, image, previous_image, material_load=False)
+					image, previous_image = setup_image(color_report, mode, name_texture, render_width, render_height, image, previous_image, material_load=False)
 				else:
-					image, previous_image = setup_image(mode, name_texture, render_width, render_height, image, previous_image, material_load=True)
+					image, previous_image = setup_image(color_report, mode, name_texture, render_width, render_height, image, previous_image, material_load=True)
 				# Avoid Circular Dependency method A: Create image copy to use in existing nodes that may be affected if baking directly in a "previous_image" whose source is an external file
 				if image == previous_image:
 					imagecopy = image.copy()
@@ -398,7 +410,11 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 					for slot in obj.material_slots:
 						if slot.material:
 							if slot.material.use_nodes:
-								if 'Principled BSDF' in slot.material.node_tree.nodes:
+								bsdf_node = None
+								for n in slot.material.node_tree.nodes:
+									if n.bl_idname == "ShaderNodeBsdfPrincipled":
+										bsdf_node = n
+								if bsdf_node:
 									if slot.material not in EmissionIgnoredMaterials:
 										channel_ignore(modes['emission_strength'].relink['n'], slot.material)
 										EmissionIgnoredMaterials.append(slot.material)
@@ -414,7 +430,11 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 						for slot in obj.material_slots:
 							if slot.material:
 								if slot.material.use_nodes:
-									if 'Principled BSDF' in slot.material.node_tree.nodes:
+									bsdf_node = None
+									for n in slot.material.node_tree.nodes:
+										if n.bl_idname == "ShaderNodeBsdfPrincipled":
+											bsdf_node = n
+									if bsdf_node:
 										if slot.material not in AlphaIgnoredMaterials:
 											channel_ignore(modes['alpha'].relink['n'], slot.material)
 											AlphaIgnoredMaterials.append(slot.material)
@@ -492,7 +512,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 				# 	bpy.ops.object.mode_set(mode='EDIT')
 				# 	bpy.ops.mesh.select_all(action='SELECT')
 				# 	for area in bpy.context.screen.areas:
-				# 		if area.type == 'IMAGE_EDITOR':
+				# 		if area.ui_type == 'UV':
 				# 			area.spaces[0].image = image
 				# 	# bpy.data.screens['UV Editing'].areas[1].spaces[0].image = image
 				# 	bpy.ops.object.mode_set(mode='OBJECT')
@@ -500,7 +520,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 				if is_clear and i == 0:
 					# Set background image (CYCLES & BLENDER_EEVEE)
 					for area in bpy.context.screen.areas:
-						if area.type == 'IMAGE_EDITOR':
+						if area.ui_type == 'UV':
 							area.spaces[0].image = image
 					# Invert background if final invert of the baked image is needed
 					if modes[mode].invert:
@@ -552,7 +572,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 				if modes[mode].composite:
 					apply_composite(image, modes[mode].composite, bpy.context.scene.texToolsSettings.bake_curvature_size)
 				
-				# If Avoid Circular Dependency: method A was used, only report
+				# If Avoid Circular Dependency method A was used, only report
 				if image == previous_image and circular_report[0] == False:
 					for material in bakeReadyMaterials:
 						tree = material.node_tree
@@ -567,7 +587,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 
 
 		for images in stored_images:
-			# If Avoid Circular Dependency: method B was used, change previous_image for the newly baked image in all materials
+			# If Avoid Circular Dependency method B was used, change previous_image for the newly baked image in all materials
 			if images[0] != images[1] and images[1] is not None:
 				for material in bpy.data.materials:
 					if material.use_nodes == True:
@@ -700,7 +720,7 @@ def get_last_item(key_name, collection):
 
 
 
-def setup_image(mode, name, width, height, image, previous_image, material_load=False):
+def setup_image(color_report, mode, name, width, height, image, previous_image, material_load=False):
 	preferences = bpy.context.preferences.addons[__package__].preferences
 
 	if preferences.bool_bake_back_color == 'CUSTOM':
@@ -708,9 +728,28 @@ def setup_image(mode, name, width, height, image, previous_image, material_load=
 	else:
 		bake_back_color = modes[mode].color
 
-	def set_color_space(image):
+	def set_color_space(color_report, image):
 		image.alpha_mode = 'NONE'
-		image.colorspace_settings.name = bpy.context.scene.texToolsSettings.bake_color_space
+		try:
+			image.colorspace_settings.name = bpy.context.scene.texToolsSettings.bake_color_space
+		except:
+			try:
+				if bpy.context.scene.texToolsSettings.bake_color_space == 'Utility - Linear - sRGB':
+					bpy.context.scene.texToolsSettings.bake_color_space = 'Non-Color'
+					color_report[0] = "ACES Color Space type is not available"
+				elif bpy.context.scene.texToolsSettings.bake_color_space == 'Utility - sRGB - Texture':
+					bpy.context.scene.texToolsSettings.bake_color_space = 'sRGB'
+					color_report[0] = "ACES Color Space type is not available"
+				elif bpy.context.scene.texToolsSettings.bake_color_space == 'Non-Color':
+					bpy.context.scene.texToolsSettings.bake_color_space = 'Utility - Linear - sRGB'
+					color_report[0] = "Standard RGB Color Space type is not available"
+				elif bpy.context.scene.texToolsSettings.bake_color_space == 'sRGB':
+					bpy.context.scene.texToolsSettings.bake_color_space = 'Utility - sRGB - Texture'
+					color_report[0] = "Standard RGB Color Space type is not available"
+				image.colorspace_settings.name = bpy.context.scene.texToolsSettings.bake_color_space
+			except:
+				color_report[0] = "No one of the known Color Space types is available"
+				return None
 
 	def resize(image):
 		if image.size[0] != width or image.size[1] != height or image.generated_width != width or image.generated_height != height:
@@ -728,7 +767,7 @@ def setup_image(mode, name, width, height, image, previous_image, material_load=
 		# Create a small new image
 		is_float_32 = preferences.bake_32bit_float == '32'
 		image = bpy.data.images.new(name, width=2, height=2, alpha=True, float_buffer=is_float_32)
-		set_color_space(image)
+		set_color_space(color_report, image)
 		apply_color(image)
 		image.file_format = 'TARGA'	#TODO revisit this when implementing image save
 		return image
@@ -746,7 +785,7 @@ def setup_image(mode, name, width, height, image, previous_image, material_load=
 					return image, None			# Not possible Circular Dependency
 				return image, previous_image	# Avoid Circular Dependency: use method B
 			else:
-				set_color_space(previous_image)
+				set_color_space(color_report, previous_image)
 				#image.generated_width = image.generated_height = 2
 				previous_image.scale(2, 2)
 				apply_color(previous_image)
@@ -755,7 +794,7 @@ def setup_image(mode, name, width, height, image, previous_image, material_load=
 				return previous_image, previous_image	# Avoid Circular Dependency: use method A
 		else:
 			if material_load:
-				set_color_space(previous_image)
+				set_color_space(color_report, previous_image)
 				#image.generated_width = image.generated_height = 2
 				previous_image.scale(2, 2)
 				apply_color(previous_image)
@@ -818,7 +857,10 @@ def relink_nodes(mode, material):
 	if material.use_nodes == False:
 		material.use_nodes = True
 	tree = material.node_tree
-	bsdf_node = tree.nodes['Principled BSDF']
+	bsdf_node = None
+	for n in tree.nodes:
+		if n.bl_idname == "ShaderNodeBsdfPrincipled":
+			bsdf_node = n
 
 	# set b, which is the base(original) socket index, and n, which is the new-values-source index for the base socket
 	b, n = modes[mode].relink['b'], modes[mode].relink['n']
@@ -852,7 +894,10 @@ def channel_ignore(channel, material):
 	if material.use_nodes == False:
 		material.use_nodes = True
 	tree = material.node_tree
-	bsdf_node = tree.nodes['Principled BSDF']
+	bsdf_node = None
+	for n in tree.nodes:
+		if n.bl_idname == "ShaderNodeBsdfPrincipled":
+			bsdf_node = n
 
 	if len(bsdf_node.inputs[channel].links) != 0 :
 		tree.links.remove(bsdf_node.inputs[channel].links[0])
