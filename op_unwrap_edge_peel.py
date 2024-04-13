@@ -4,15 +4,16 @@ import bmesh
 from . import utilities_ui
 from . import utilities_uv
 from . import op_rectify
+from . import settings
 
 
 
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_unwrap_edge_peel"
 	bl_label = "Edge Peel"
-	bl_description = "Unwrap pipe along selected edges"
+	bl_description = "Unwrap as a pipe along the edges selected in 3D Space"
 	bl_options = {'REGISTER', 'UNDO'}
-	
+
 	@classmethod
 	def poll(cls, context):
 		if not bpy.context.active_object:
@@ -27,8 +28,10 @@ class op(bpy.types.Operator):
 
 
 	def execute(self, context):
-		contextViewUV = utilities_ui.GetContextViewUV()
-		if not contextViewUV:
+		selection_mode = bpy.context.scene.tool_settings.uv_select_mode
+		is_sync = bpy.context.scene.tool_settings.use_uv_select_sync
+		context_override = utilities_ui.GetContextViewUV()
+		if not context_override:
 			self.report({'ERROR_INVALID_INPUT'}, "This tool requires an available UV/Image view")
 			return {'CANCELLED'}
 
@@ -41,16 +44,25 @@ class op(bpy.types.Operator):
 		# Move to active UDIM Tile TODO pack if not {'CANCELLED'} in the active UDIM Tile when implemented in Blender master (watch out for versioning)
 		udim_tile, column, row = utilities_uv.get_UDIM_tile_coords(bpy.context.active_object)
 		if udim_tile != 1001:
-			bpy.ops.transform.translate(contextViewUV, value=(column, row, 0), mirror=False, use_proportional_edit=False)
+			if settings.bversion >= 3.2:
+				with bpy.context.temp_override(**context_override):
+					bpy.ops.transform.translate(value=(column, row, 0), mirror=False, use_proportional_edit=False)
+			else:
+				bpy.ops.transform.translate(context_override, value=(column, row, 0), mirror=False, use_proportional_edit=False)
+
+		# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
+		if settings.bversion >= 3.2:
+			with bpy.context.temp_override(**context_override):
+				bpy.ops.uv.select_mode(type='VERTEX')
+		bpy.context.scene.tool_settings.uv_select_mode = selection_mode
+		if is_sync:
+			bpy.context.scene.tool_settings.use_uv_select_sync = True
 
 		return {'FINISHED'}
 
 
 
 def unwrap_edges_pipe(self, context, padding):
-	selection_mode = bpy.context.scene.tool_settings.uv_select_mode
-	is_sync = bpy.context.scene.tool_settings.use_uv_select_sync
-
 	me = bpy.context.active_object.data
 	bm = bmesh.from_edit_mesh(me)
 	uv_layers = bm.loops.layers.uv.verify()
@@ -75,7 +87,7 @@ def unwrap_edges_pipe(self, context, padding):
 	bpy.ops.mesh.mark_seam(clear=True)
 	selected_faces = {face for face in bm.faces if face.select}
 
-	if len(selected_faces) == 0:
+	if not selected_faces:
 		bpy.ops.mesh.select_all(action='DESELECT')
 		self.report({'INFO'}, "It's not possible to perform the unwrap on loose edges" )
 		return
@@ -97,7 +109,7 @@ def unwrap_edges_pipe(self, context, padding):
 
 
 	# Rectify the unwrapped islands
-	islands = utilities_uv.splittedSelectionByIsland(bm, uv_layers, selected_faces)
+	islands = utilities_uv.getSelectionIslands(bm, uv_layers, extend_selection_to_islands=True, selected_faces=selected_faces)
 
 	for island in islands:
 		unrectified_faces = set()
@@ -154,13 +166,3 @@ def unwrap_edges_pipe(self, context, padding):
 		face.select_set(True)
 		for loop in face.loops:
 			loop[uv_layers].select = True
-
-	# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
-	bpy.ops.uv.select_mode(type='VERTEX')
-	bpy.context.scene.tool_settings.uv_select_mode = selection_mode
-
-	if is_sync:
-		bpy.context.scene.tool_settings.use_uv_select_sync = True
-
-
-bpy.utils.register_class(op)

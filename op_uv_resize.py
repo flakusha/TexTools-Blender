@@ -1,5 +1,4 @@
 import bpy
-import bmesh
 from mathutils import Vector
 
 from . import utilities_uv
@@ -28,7 +27,7 @@ def on_dropdown_size_y(self, context):
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_uv_resize"
 	bl_label = "Resize Area"
-	bl_description = "Resize or extend the UV area"
+	bl_description = "Resize the UV area"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	size_x : bpy.props.IntProperty(
@@ -81,7 +80,6 @@ class op(bpy.types.Operator):
 
 
 	def invoke(self, context, event):
-		print("Invoke resize area")
 		self.size_x = bpy.context.scene.texToolsSettings.size[0]
 		self.size_y = bpy.context.scene.texToolsSettings.size[1]
 
@@ -179,7 +177,7 @@ class op(bpy.types.Operator):
 def resize_uv(self, context, mode, size_A, size_B):
 
 	# Set pivot
-	bpy.context.tool_settings.transform_pivot_point = 'CURSOR'
+	bpy.context.space_data.pivot_point = 'CURSOR'
 	if mode == 'TL':
 		bpy.ops.uv.cursor_set(location=Vector([0,1]))
 	elif mode == 'TR':
@@ -239,6 +237,3 @@ def resize_image(context, mode, size_A, size_B):
 
 		# Clean up images and materials
 		utilities_texel.checker_images_cleanup()
-
-
-bpy.utils.register_class(op)

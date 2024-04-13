@@ -48,7 +48,7 @@ def checker_images_cleanup():
 		if image and image_material_prefix in image.name:
 			if not image.users:
 				bpy.data.images.remove(image, do_unlink=True)
-				return
+
 
 
 def get_checker_name(mode, size_x, size_y):
@@ -179,8 +179,11 @@ def get_tile_size(self, image, udim_tile):
 			bpy.data.images.load(image_location, check_existing=False)
 			#bpy.ops.image.open(filepath=image_location, relative_path=False, use_udim_detecting=False)
 			purge = True
+
 	tile = bpy.data.images[tile_name]
 	size = min(tile.size[0], tile.size[1])
 	if purge:
+		#bpy.data.batch_remove([tile])
 		bpy.data.images.remove(tile, do_unlink=True)
+
 	return size

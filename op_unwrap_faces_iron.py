@@ -10,9 +10,9 @@ from . import utilities_ui
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_unwrap_faces_iron"
 	bl_label = "Iron"
-	bl_description = "Unwrap selected faces into a single UV island"
+	bl_description = "Unwrap selected faces into a single UV Island"
 	bl_options = {'REGISTER', 'UNDO'}
-	
+
 	@classmethod
 	def poll(cls, context):
 		if not bpy.context.active_object:
@@ -70,6 +70,3 @@ def main(self, context, udim_tile, column, row):
 				loop[uv_layers].uv += Vector((column, row))
 
 	bpy.context.scene.tool_settings.mesh_select_mode = pre_selection_mode
-
-
-bpy.utils.register_class(op)

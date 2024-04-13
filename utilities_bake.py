@@ -14,6 +14,14 @@ keywords_float = ['floater','float']					#excluded 'f' since TexTools v1.4
 
 split_chars = [' ','_','.','-']
 
+if settings.bversion >= 4.0:
+	chs = {'ech':26, 'rch':2, 'trch':2, 'ssch':7, 'scch':0, 'mch':1, 'sch':12, 'stch':13, 'ach':14, 'arch':15, 'shch':23, 'shtch':25, 'cch':18, 'crch':19, 'esch':27, 'alch':4}
+else:
+	sh = 0		# shift of channels, depends on the Blender version
+	if settings.bversion >= 3.0:
+		sh = 2
+	chs = {'ech':17+sh, 'rch':7+sh, 'ssch':1, 'scch':3, 'mch':4+sh, 'sch':5+sh, 'stch':0, 'shtch':0, 'ach':8+sh, 'arch':9+sh, 'shch':10+sh, 'cch':12+sh, 'crch':13+sh, 'trch':16+sh, 'esch':18+sh, 'alch':19+sh}
+
 allMaterials = []
 allMaterialsNames = []
 elementsCount = 0
@@ -150,6 +158,10 @@ def get_set_name_base(obj):
 
 
 def get_set_name(obj):
+
+	if bpy.context.scene.texToolsSettings.bake_force == "Multi":
+		return obj.name
+
 	# Get Basic name
 	name = get_set_name_base(obj)
 
@@ -180,6 +192,9 @@ def get_set_name(obj):
 
 def get_object_type(obj):
 
+	if bpy.context.scene.texToolsSettings.bake_force == "Multi":
+		return 'low'
+
 	name = get_set_name_base(obj)
 
 	# Detect by name pattern
@@ -195,14 +210,14 @@ def get_object_type(obj):
 				return 'float'
 
 	# Detect by modifiers (Only if more than 1 object selected)
-	if len(bpy.context.selected_objects) > 1:
-		if obj.modifiers:
-			for modifier in obj.modifiers:
-				if modifier.type == 'SUBSURF' and modifier.render_levels > 0:
-					return 'high'
-				elif modifier.type == 'BEVEL':
-					return 'high'
-
+	if bpy.context.preferences.addons[__package__].preferences.bool_modifier_auto_high:
+		if len(bpy.context.selected_objects) > 1:
+			if obj.modifiers:
+				for modifier in obj.modifiers:
+					if modifier.type == 'SUBSURF' and modifier.render_levels > 0:
+						return 'high'
+					elif modifier.type == 'BEVEL':
+						return 'high'
 
 	# Detect High first, more rare
 	for string in strings:
@@ -216,14 +231,11 @@ def get_object_type(obj):
 			if key == string:
 				return 'cage'
 
-	
-
 	# Detect low
 	for string in strings:
 		for key in keywords_low:
 			if key == string:
 				return 'low'
-
 
 	# if nothing was detected, assume it is low
 	return 'low'
@@ -252,7 +264,7 @@ def get_bake_sets():
 		for obj in bpy.context.selected_objects:
 			if obj.type == 'MESH':
 				filtered[obj] = get_object_type(obj)
-	
+
 	groups = []
 	# Group by names
 	for obj in filtered:
@@ -281,9 +293,8 @@ def get_bake_sets():
 			if key == get_set_name(group[0]):
 				sorted_groups.append(group)
 				break
-				
-	groups = sorted_groups			
 
+	groups = sorted_groups			
 
 	bake_sets = []
 	for group in groups:
@@ -300,7 +311,6 @@ def get_bake_sets():
 				cage.append(obj)
 			elif filtered[obj] == 'float':
 				float.append(obj)
-
 
 		name = get_set_name(group[0])
 		bake_sets.append(BakeSet(name, low, cage, high, float))
@@ -346,11 +356,15 @@ def assign_vertex_color(obj):
 		vclsNames = [vcl.name for vcl in obj.data.vertex_colors]
 		if 'TexTools_temp' in vclsNames:
 			obj.data.vertex_colors['TexTools_temp'].active = True
+			obj.data.vertex_colors['TexTools_temp'].active_render = True
 		else:
 			obj.data.vertex_colors.new(name='TexTools_temp')
 			obj.data.vertex_colors['TexTools_temp'].active = True
+			obj.data.vertex_colors['TexTools_temp'].active_render = True
 	else:
 		obj.data.vertex_colors.new(name='TexTools_temp')
+		obj.data.vertex_colors['TexTools_temp'].active = True
+		obj.data.vertex_colors['TexTools_temp'].active_render = True
 
 
 
@@ -368,10 +382,8 @@ def setup_vertex_color_selection(obj):
 	bpy.context.tool_settings.vertex_paint.brush.color = (1, 1, 1)
 	bpy.context.object.data.use_paint_mask = True
 	bpy.ops.paint.vertex_color_set()
-
 	bpy.context.object.data.use_paint_mask = False
 
-	# Back to object mode
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 
@@ -384,17 +396,19 @@ def setup_vertex_color_dirty(obj):
 
 	# Fill white then, 
 	bm = bmesh.from_edit_mesh(obj.data)
-	colorLayer = bm.loops.layers.color.active
-
+	if settings.bversion >= 3.4:
+		colorLayerIndex = obj.data.attributes.active_color_index
+		colorLayer = bm.loops.layers.color[colorLayerIndex]
+	else:
+		colorLayer = bm.loops.layers.color.active
 
 	color = utilities_color.safe_color( (1, 1, 1) )
 
 	for face in bm.faces:
 		for loop in face.loops:
 				loop[colorLayer] = color
-	obj.data.update()
 
-	# Back to object mode
+	obj.data.update()
 	bpy.ops.object.mode_set(mode='OBJECT')
 	bpy.ops.paint.vertex_color_dirt(dirt_angle=pi/2)
 	bpy.ops.paint.vertex_color_dirt()
@@ -431,8 +445,6 @@ def setup_vertex_color_id_material(obj, previous_materials):
 			bpy.ops.paint.vertex_color_set()
 
 	obj.data.update()
-
-	# Back to object mode
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 
@@ -442,11 +454,16 @@ def setup_vertex_color_id_element(obj):
 	obj.select_set( state = True, view_layer = None)
 	bpy.context.view_layer.objects.active = obj
 	bpy.ops.object.mode_set(mode='EDIT')
-
 	bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='FACE')
 
 	bm = bmesh.from_edit_mesh(obj.data)
-	colorLayer = bm.loops.layers.color.active
+
+	if settings.bversion >= 3.4:
+		colorLayerIndex = obj.data.attributes.active_color_index
+		colorLayer = bm.loops.layers.color[colorLayerIndex]
+	else:
+		colorLayer = bm.loops.layers.color.active
+
 
 	# Collect elements
 	processed = set([])
@@ -472,11 +489,10 @@ def setup_vertex_color_id_element(obj):
 		for face in groups[i]:
 			for loop in face.loops:
 				loop[colorLayer] = color
-	
+
 	elementsCount += len(groups)
 
 	obj.data.update()
-	# Back to object mode
 	bpy.ops.object.mode_set(mode='OBJECT')
 
 

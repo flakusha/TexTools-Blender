@@ -1,17 +1,12 @@
 import bpy
 import os
-import bmesh
 import time
 
 from . import utilities_ui
+from . import utilities_uv
 from . import settings
 from . import utilities_bake as ub
 
-
-
-ch_shift = 0	#Principled BSDF input Sockets shift amount by version 3.0
-if settings.bversion >= 3.0:
-	ch_shift = 2
 
 # Notes: https://docs.blender.org/manual/en/dev/render/blender_render/bake.html
 modes={
@@ -27,28 +22,28 @@ modes={
 	'dust': 					ub.BakeMode('bake_dust',			type='EMIT', 		setVColor=ub.setup_vertex_color_dirty),
 	'ao':						ub.BakeMode('',						type='AO', 			params=["bake_samples"], engine='CYCLES'),
 	'position':					ub.BakeMode('bake_position',		type='EMIT'),
-	'curvature':				ub.BakeMode('',						type='NORMAL',		use_project=True, 		params=["bake_curvature_size"], composite="curvature"),
-	'wireframe':				ub.BakeMode('bake_wireframe',		type='EMIT', 		color=(0, 0, 0, 1), 	params=["bake_wireframe_size"]),
+	'curvature':				ub.BakeMode('',						type='NORMAL',		use_project=True, 	params=["bake_curvature_size"], composite="curvature"),
+	'wireframe':				ub.BakeMode('bake_wireframe',		type='EMIT', 		color=(0, 0, 0, 1), params=["bake_wireframe_size"]),
 	'id_element':				ub.BakeMode('bake_vertex_color',	type='EMIT', 		setVColor=ub.setup_vertex_color_id_element),
 	'id_material':				ub.BakeMode('bake_vertex_color',	type='EMIT', 		setVColor=ub.setup_vertex_color_id_material),
 	'selection':				ub.BakeMode('bake_vertex_color',	type='EMIT', 		color=(0, 0, 0, 1), setVColor=ub.setup_vertex_color_selection),
 	'diffuse':					ub.BakeMode('',						type='DIFFUSE'),
-	'base_color':				ub.BakeMode('',						type='EMIT',								relink = {'needed':True, 'b':17+ch_shift, 'n':0}),
-	'sss_strength':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':1}),
-	'sss_color':				ub.BakeMode('',						type='EMIT',								relink = {'needed':True, 'b':17+ch_shift, 'n':3}),
-	'metallic':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':4+ch_shift}),
-	'specular':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':5+ch_shift}),
-	'specular_tint':			ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':6+ch_shift}),
+	'base_color':				ub.BakeMode('',						type='EMIT',							relink = {'needed':True, 'b':ub.chs['ech'], 'n':0}),
+	'sss_strength':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['ssch']}),
+	'sss_color':				ub.BakeMode('',						type='EMIT',							relink = {'needed':True, 'b':ub.chs['ech'], 'n':ub.chs['scch']}),
+	'metallic':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['mch']}),
+	'specular':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['sch']}),
+	'specular_tint':			ub.BakeMode('',						type='EMIT',		color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['ech'], 'n':ub.chs['stch']}),
 	'roughness':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1)),
-	'glossiness':				ub.BakeMode('',						type='ROUGHNESS',	color=(1, 1, 1, 1), 	invert=True),
-	'anisotropic':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':8+ch_shift}),
-	'anisotropic_rotation':		ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':9+ch_shift}),
-	'sheen':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':10+ch_shift}),
-	'sheen_tint':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':11+ch_shift}),
-	'clearcoat':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':12+ch_shift}),
-	'clearcoat_roughness':		ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':13+ch_shift}),
+	'glossiness':				ub.BakeMode('',						type='ROUGHNESS',	color=(1, 1, 1, 1), invert=True),
+	'anisotropic':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['ach']}),
+	'anisotropic_rotation':		ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['arch']}),
+	'sheen':					ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['shch']}),
+	'sheen_tint':				ub.BakeMode('',						type='EMIT',		color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['ech'], 'n':ub.chs['shtch']}),
+	'clearcoat':				ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['cch']}),
+	'clearcoat_roughness':		ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['crch']}),
 	'transmission':				ub.BakeMode('',						type='TRANSMISSION'),
-	'transmission_roughness':	ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':16+ch_shift}),
+	'transmission_roughness':	ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['trch']}),
 	'emission':					ub.BakeMode('',						type='EMIT',		color=(0, 0, 0, 1)),
 	'environment':				ub.BakeMode('',						type='ENVIRONMENT'),
 	'uv':						ub.BakeMode('',						type='UV'),
@@ -57,11 +52,10 @@ modes={
 }
 
 if settings.bversion >= 2.91:
-	modes['emission_strength']= ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),		relink = {'needed':True, 'b':7+ch_shift, 'n':18+ch_shift})
-	modes['alpha']= 			ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1), 	relink = {'needed':True, 'b':7+ch_shift, 'n':19+ch_shift})
+	modes['emission_strength']= ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1),	relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['esch']})
+	modes['alpha']= 			ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1), relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['alch']})
 else:
-	modes['alpha']= 			ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1), 	relink = {'needed':True, 'b':7+ch_shift, 'n':18+ch_shift})
-
+	modes['alpha']= 			ub.BakeMode('',						type='ROUGHNESS',	color=(0, 0, 0, 1), relink = {'needed':True, 'b':ub.chs['rch'], 'n':ub.chs['esch']})
 
 
 
@@ -154,8 +148,7 @@ class op(bpy.types.Operator):
 		settings.bake_error = ""
 		return True
 
-
-
+		
 	def execute(self, context):
 		startTime = time.monotonic()
 		preferences = bpy.context.preferences.addons[__package__].preferences
@@ -201,7 +194,7 @@ class op(bpy.types.Operator):
 			mode = bake_mode,
 			size = bpy.context.scene.texToolsSettings.size, 
 
-			bake_single = bpy.context.scene.texToolsSettings.bake_force_single,
+			bake_force = bpy.context.scene.texToolsSettings.bake_force,
 			sampling_scale = int(bpy.context.scene.texToolsSettings.bake_sampling),
 			samples = bpy.context.scene.texToolsSettings.bake_samples,
 			cage_extrusion = bpy.context.scene.texToolsSettings.bake_cage_extrusion,
@@ -229,7 +222,7 @@ class op(bpy.types.Operator):
 
 
 
-def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion, ray_distance, circular_report, color_report, selected, active, pre_selection_mode):
+def bake(self, mode, size, bake_force, sampling_scale, samples, cage_extrusion, ray_distance, circular_report, color_report, selected, active, pre_selection_mode):
 	print("Bake '{}'".format(mode))
 
 	# Get the baking sets / pairs
@@ -262,7 +255,6 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 
 	# Get custom materials
 	material_loaded = get_material(mode)
-	material_empty = None
 
 	# Setup properties of the custom material_loaded
 	if material_loaded is not None:
@@ -287,6 +279,8 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 	# Create dictionaries to remember original and temporary -copied- materials used in the baked objects
 	previous_materials = {}
 	copied_materials = {}
+	# Container to save existing UDIM tile names of each set
+	tiles = []
 
 	for bset in sets:
 		for obj in (bset.objects_low + bset.objects_high + bset.objects_float):
@@ -305,25 +299,27 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 				if mtl not in copied_materials:
 					mat_copied = mtl.copy()
 					obj.data.materials[i] = mat_copied
-					copied_materials[mtl] = mat_copied
+					copied_materials[mtl.name] = mat_copied.name
 				else:
-					obj.data.materials[i] = copied_materials[mtl]
+					obj.data.materials[i] = copied_materials[mtl.name]
 
 	def use_material_loaded(obj):
 		if len(obj.data.materials) > 0:
 			for i in range(len(obj.data.materials)):
-				obj.data.materials[i] = material_loaded
+				obj.data.materials[i] = bpy.data.materials[material_loaded]
 		else:
-			obj.data.materials.append(material_loaded)
-	
+			obj.data.materials.append(bpy.data.materials[material_loaded])
+
 	for bset in settings.sets:
 		if (len(bset.objects_high) + len(bset.objects_float)) == 0:
+			tiles.append( utilities_uv.get_UDIM_tiles( bset.objects_low ) )
 			for obj in bset.objects_low:
 				if material_loaded is None:
 					use_copied_mtls(obj)
 				else:
 					use_material_loaded(obj)
 		else:
+			tiles.append( utilities_uv.get_UDIM_tiles( bset.objects_high + bset.objects_float ) )
 			if material_loaded is None:
 				for obj in (bset.objects_low + bset.objects_high + bset.objects_float):
 					use_copied_mtls(obj)
@@ -343,32 +339,45 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 	stored_images = []	# [image, previous_image, imagecopy] list of lists
 
 
-
 	try:
-
 		for s,bset in enumerate(sets):
 
 			# Get image name
 			name_texture = "{}_{}".format(bset.name, mode)
-			if bake_single:
-				name_texture = "{}_{}".format(sets[0].name, mode)	# In Single mode bake into same texture
+			if bake_force == "Single":
+				name_texture = "{}_{}".format(sets[0].name, mode)	# In Single mode, bake into the same texture
 			#path = bpy.path.abspath("//{}.tga".format(name_texture))
 
-			is_clear = (not bake_single) or (bake_single and s==0)
+			is_clear = (not bake_force == "Single") or (bake_force == "Single" and s==0)
 
 			# Setup "image" to bake on and retrieve "previous_image": an image that exists in the blend file with the same name than "image", maybe used in materials involved in the bake
 			if is_clear:
 				bakeReadyMaterials = []
+				loaded = True
 				if material_loaded is None:
-					image, previous_image = setup_image(color_report, mode, name_texture, render_width, render_height, image, previous_image, material_load=False)
-				else:
-					image, previous_image = setup_image(color_report, mode, name_texture, render_width, render_height, image, previous_image, material_load=True)
+					loaded = False
+
+				image, previous_image = setup_image(color_report, mode, name_texture, render_width, render_height, tiles[s], material_load=loaded)
+
 				# Avoid Circular Dependency method A: Create image copy to use in existing nodes that may be affected if baking directly in a "previous_image" whose source is an external file
 				if image == previous_image:
 					imagecopy = image.copy()
 				else:
 					imagecopy = None
-				stored_images.append([image, previous_image, imagecopy])
+
+				image_name = image.name
+
+				if previous_image is None:
+					previous_image_name = None
+				else:
+					previous_image_name = previous_image.name
+
+				if imagecopy is None:
+					imagecopy_name = None
+				else:
+					imagecopy_name = imagecopy.name
+
+				stored_images.append([image_name, previous_image_name, imagecopy_name, name_texture])
 
 
 
@@ -404,7 +413,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 									channel_ignore(modes['alpha'].relink['n'], slot.material)
 									AlphaIgnoredMaterials.append(slot.material)
 					if setup_bake_nodes:
-						setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagecopy)
+						setup_image_bake_node(obj, bakeReadyMaterials, image_name, previous_image_name, imagecopy_name)
 				
 				elif bool_emission_strength_ignore and settings.bversion >= 2.91 and mode == 'emission':
 					for slot in obj.material_slots:
@@ -423,7 +432,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 											channel_ignore(modes['alpha'].relink['n'], slot.material)
 											AlphaIgnoredMaterials.append(slot.material)
 					if setup_bake_nodes:
-						setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagecopy)
+						setup_image_bake_node(obj, bakeReadyMaterials, image_name, previous_image_name, imagecopy_name)
 				
 				else:
 					if (bool_alpha_ignore and mode != 'ao' and mode != 'diffuse') or mode == 'alpha':
@@ -439,7 +448,7 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 											channel_ignore(modes['alpha'].relink['n'], slot.material)
 											AlphaIgnoredMaterials.append(slot.material)
 					if setup_bake_nodes:
-						setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagecopy)
+						setup_image_bake_node(obj, bakeReadyMaterials, image_name, previous_image_name, imagecopy_name)
 
 
 			# Assign Materials to Objects / tune the existing materials, and distribute temp bake image nodes
@@ -454,34 +463,30 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 						# 		for i in range(len(obj.material_slots)):
 						# 			bpy.ops.object.material_slot_remove({'object': obj})
 						if len(obj.material_slots) == 0 or (not all(obj.data.materials)):
-							if "TT_bake_node" in bpy.data.materials:
-								material_empty = bpy.data.materials["TT_bake_node"]
-							else:
-								material_empty = bpy.data.materials.new(name="TT_bake_node")
+							if "TT_bake_node" not in bpy.data.materials:
+								bpy.data.materials.new(name="TT_bake_node")
 							if len(obj.material_slots) == 0:
-								obj.data.materials.append(material_empty)
+								obj.data.materials.append(bpy.data.materials["TT_bake_node"])
 							else:
 								for slot in obj.material_slots:
 									if not slot.material:
-										slot.material = material_empty
+										slot.material = bpy.data.materials["TT_bake_node"]
 					assign_tune_materials(obj, setup_bake_nodes=True)
 				if material_loaded is not None :
-					setup_image_bake_node(bset.objects_low[0], bakeReadyMaterials, image, previous_image, imagecopy)
+					setup_image_bake_node(bset.objects_low[0], bakeReadyMaterials, image_name, previous_image_name, imagecopy_name)
 			else:
 				# High to low poly: Low poly requires any material to bake into image
 				for obj in bset.objects_low:
 					if len(obj.material_slots) == 0 or (not all(obj.data.materials)):
-						if "TT_bake_node" in bpy.data.materials:
-							material_empty = bpy.data.materials["TT_bake_node"]
-						else:
-							material_empty = bpy.data.materials.new(name="TT_bake_node")
+						if "TT_bake_node" not in bpy.data.materials:
+							bpy.data.materials.new(name="TT_bake_node")
 						if len(obj.material_slots) == 0:
-							obj.data.materials.append(material_empty)
+							obj.data.materials.append(bpy.data.materials["TT_bake_node"])
 						else:
 							for slot in obj.material_slots:
 								if not slot.material:
-									slot.material = material_empty
-					setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagecopy)
+									slot.material = bpy.data.materials["TT_bake_node"]
+					setup_image_bake_node(obj, bakeReadyMaterials, image_name, previous_image_name, imagecopy_name)
 				# Assign material to highpoly or tune the existing material/s
 				for obj in (bset.objects_high+bset.objects_float):
 					assign_tune_materials(obj)
@@ -519,9 +524,9 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 
 				if is_clear and i == 0:
 					# Set background image (CYCLES & BLENDER_EEVEE)
-					for area in bpy.context.screen.areas:
-						if area.ui_type == 'UV':
-							area.spaces[0].image = image
+					# for area in bpy.context.screen.areas:
+					# 	if area.ui_type == 'UV':
+					# 		area.spaces[0].image = bpy.data.images[image_name]
 					# Invert background if final invert of the baked image is needed
 					if modes[mode].invert:
 						bpy.ops.image.invert(invert_r=True, invert_g=True, invert_b=True, invert_a=False)
@@ -557,61 +562,35 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 						len(bset.objects_float) > 0,
 						obj_cage
 					)
-			
+
 			# Restore renderable for cage objects
 			for obj_cage in bset.objects_cage:
 				obj_cage.hide_render = False
 
-			# Operations to be made only after the bake is, or the bakes are, finished
-			if (not bake_single) or (bake_single and s == len(sets)-1):
+			# Operations to be made only after the bake is -or the bakes are- finished
+			if (not bake_force == "Single") or (bake_force == "Single" and s == len(sets)-1):
 				if modes[mode].invert:
 					bpy.ops.image.invert(invert_r=True, invert_g=True, invert_b=True, invert_a=False)
 				if render_width != size[0] or render_height != size[1]:
-					image.scale(size[0],size[1])
+					bpy.data.images[image_name].scale(size[0],size[1])
 
 				if modes[mode].composite:
-					apply_composite(image, modes[mode].composite, bpy.context.scene.texToolsSettings.bake_curvature_size)
-				
-				# If Avoid Circular Dependency method A was used, only report
-				if image == previous_image and circular_report[0] == False:
-					for material in bakeReadyMaterials:
-						tree = material.node_tree
-						for node in tree.nodes:
-							if node.bl_idname == 'ShaderNodeTexImage':
-								if node.image == imagecopy:
-									circular_report[0] = True
-									break
-						else:
-							continue
-						break
+					apply_composite(image_name, modes[mode].composite, bpy.context.scene.texToolsSettings.bake_curvature_size)
 
-
-		for images in stored_images:
-			# If Avoid Circular Dependency method B was used, change previous_image for the newly baked image in all materials
-			if images[0] != images[1] and images[1] is not None:
-				for material in bpy.data.materials:
-					if material.use_nodes == True:
-						tree = material.node_tree
-						for node in tree.nodes:
-							if node.bl_idname == 'ShaderNodeTexImage':
-								if node.image == images[1]:
-									if material in copied_materials:
-										circular_report[0] = True
-									node.image = images[0]
-				images[0].name = name_texture
 
 			# TODO: if autosave: image.save()
 
 
 	finally:
-
 		# Restore materials whether or not there is a problem during the baking
 		for obj in previous_materials:
 			if len(previous_materials[obj]) == 0:
 				if len(obj.material_slots) > 0:
 					obj.active_material_index = 0
+					context_override = {'object': obj}
 					for i in range(len(obj.material_slots)):
-						bpy.ops.object.material_slot_remove({'object': obj})
+						with bpy.context.temp_override(**context_override):
+							bpy.ops.object.material_slot_remove()
 			else:
 				for i, mtlname in enumerate(previous_materials[obj]):
 					if mtlname is None:
@@ -626,26 +605,64 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 						obj.data.vertex_colors.remove(obj.data.vertex_colors['TexTools_temp'])
 
 
-		for images in stored_images:
-			if images[2] is not None:
-				bpy.data.images.remove(images[2], do_unlink=True)	# Delete imagecopy
-			elif images[1] is not None:
-				bpy.data.images.remove(images[1], do_unlink=True)	# Delete previous_image
-
 		for mtl in copied_materials.values():
-			bpy.data.materials.remove(mtl, do_unlink=True)
+			bpy.data.materials.remove(bpy.data.materials[mtl], do_unlink=True)
 
-		if material_empty is not None:
-			bpy.data.materials.remove(material_empty, do_unlink=True)
+		if "TT_bake_node" in bpy.data.materials:
+			bpy.data.materials.remove(bpy.data.materials["TT_bake_node"], do_unlink=True)
 
 		if material_loaded is not None:
-			bpy.data.materials.remove(material_loaded, do_unlink=True)
+			bpy.data.materials.remove(bpy.data.materials[material_loaded], do_unlink=True)
+
+
+		for images in stored_images:
+			if images[1] and images[1] in bpy.data.images and bpy.data.images[images[0]] != bpy.data.images[images[1]]:
+				# If Avoid Circular Dependency method B was used, change previous_image for the newly baked image in all materials
+				#bpy.data.images[images[1]].user_remap(bpy.data.images[images[0]])
+				for material in bpy.data.materials:
+					if material.use_nodes == True:
+						tree = material.node_tree
+						for node in tree.nodes:
+							if node.bl_idname == 'ShaderNodeTexImage':
+								if node.image == bpy.data.images[images[1]]:
+									if material in copied_materials:
+										circular_report[0] = True
+									node.image = bpy.data.images[images[0]]
+
+			# Force previous or temporary images to be removed (user related errors may be prompted in console, but the process should be stable)
+			if images[2] and images[2] in bpy.data.images:
+				#bpy.data.images[images[2]].user_clear()
+				#bpy.data.batch_remove([bpy.data.images[images[2]]])
+				bpy.data.images.remove(bpy.data.images[images[2]], do_unlink=True)	# Delete imagecopy
+			elif images[1] and images[1] in bpy.data.images:
+				#bpy.data.images[images[1]].user_clear()
+				#bpy.data.batch_remove([bpy.data.images[images[1]]])
+				bpy.data.images.remove(bpy.data.images[images[1]], do_unlink=True)	# Delete previous_image
+
+			# If Avoid Circular Dependency method A was used, clear users of the saved image and recover them for the newly baked image (they share the ID but are not the same)
+			if images[2]:
+				circular_report[0] = True
+				bpy.data.images[images[0]].user_clear()
+				for material in bpy.data.materials:
+					if material.use_nodes == True:
+						tree = material.node_tree
+						for node in tree.nodes:
+							if node.bl_idname == 'ShaderNodeTexImage':
+								if node.image.name == images[0]:
+									node.image = bpy.data.images[images[0]]
+
+			# Always set proper name to the newly baked image (when all previous or temporary images have been removed)
+			bpy.data.images[images[0]].name = images[3]
+
 
 		# Restore settings and selection mode
 		ub.restore_bake_settings()
 		bpy.ops.object.select_all(action='DESELECT')
 		for obj in selected:
 			obj.select_set( state = True, view_layer = None)
+		# Enter and exit Edit Mode to force set a real vertex colors layer as active
+		bpy.ops.object.mode_set(mode='EDIT')
+		bpy.ops.object.mode_set(mode='OBJECT')
 		if active:
 			bpy.context.view_layer.objects.active = active
 			bpy.ops.object.mode_set(mode=pre_selection_mode)
@@ -653,7 +670,8 @@ def bake(self, mode, size, bake_single, sampling_scale, samples, cage_extrusion,
 
 
 
-def apply_composite(image, scene_name, size):
+def apply_composite(image_name, scene_name, size):
+	image = bpy.data.images[image_name]
 	previous_scene = bpy.context.window.scene
 	# avoid Sun Position addon error
 	preWorldPropertiesNodesBool = previous_scene.world.use_nodes
@@ -663,7 +681,7 @@ def apply_composite(image, scene_name, size):
 	if scene_name in bpy.data.scenes:
 		scene = bpy.data.scenes[scene_name]
 	else:
-		path = os.path.join(os.path.dirname(__file__), "resources/compositing.blend")+"\\Scene\\"
+		path = os.path.join(os.path.dirname(__file__), "resources/compositing.blend", "Scene")
 		bpy.ops.wm.append(filename=scene_name, directory=path, link=False, autoselect=False)
 		scene = bpy.data.scenes[scene_name]
 
@@ -720,7 +738,7 @@ def get_last_item(key_name, collection):
 
 
 
-def setup_image(color_report, mode, name, width, height, image, previous_image, material_load=False):
+def setup_image(color_report, mode, name, width, height, tiles, material_load=False):
 	preferences = bpy.context.preferences.addons[__package__].preferences
 
 	if preferences.bool_bake_back_color == 'CUSTOM':
@@ -753,9 +771,12 @@ def setup_image(color_report, mode, name, width, height, image, previous_image, 
 
 	def resize(image):
 		if image.size[0] != width or image.size[1] != height or image.generated_width != width or image.generated_height != height:
-			#image.generated_width = width
-			#image.generated_height = height
 			image.scale(width, height)
+
+	def set_image_as_background(image):
+		for area in bpy.context.screen.areas:
+			if area.ui_type == 'UV':
+				area.spaces[0].image = bpy.data.images[image.name]
 
 	def apply_color(image):
 		# Set background color to a small version of the image for performance
@@ -764,15 +785,31 @@ def setup_image(color_report, mode, name, width, height, image, previous_image, 
 		resize(image)
 
 	def image_create():
-		# Create a small new image
 		is_float_32 = preferences.bake_32bit_float == '32'
-		image = bpy.data.images.new(name, width=2, height=2, alpha=True, float_buffer=is_float_32)
+
+		if tiles and settings.bversion >= 3.2:
+			# Create a full size new tiled image with alpha background
+			image = bpy.data.images.new(name, width=width, height=height, alpha=True, float_buffer=is_float_32, tiled=True)
+		else:
+			# Create a small new image
+			image = bpy.data.images.new(name, width=2, height=2, alpha=True, float_buffer=is_float_32, tiled=False)
+
+		set_image_as_background(image)
 		set_color_space(color_report, image)
-		apply_color(image)
-		image.file_format = 'TARGA'	#TODO revisit this when implementing image save
+
+		if tiles and settings.bversion >= 3.2:
+			image.tiles.get(1001).generated_color = bake_back_color
+			for tile in tiles:
+				bpy.ops.image.tile_add(number=tile, count=1, label="", fill=True, width=width, height=height, float=is_float_32, alpha=True, color=bake_back_color)
+			image.tiles.active_index = 0
+		else:
+			apply_color(image)
+
+		#TODO revisit this if image save is implemented
+		#image.file_format = 'TARGA'
 		return image
-	
-	
+
+
 	if name in bpy.data.images:
 		previous_image = bpy.data.images[name]
 		if previous_image.source == 'FILE':
@@ -785,19 +822,21 @@ def setup_image(color_report, mode, name, width, height, image, previous_image, 
 					return image, None			# Not possible Circular Dependency
 				return image, previous_image	# Avoid Circular Dependency: use method B
 			else:
+				set_image_as_background(previous_image)
 				set_color_space(color_report, previous_image)
-				#image.generated_width = image.generated_height = 2
-				previous_image.scale(2, 2)
-				apply_color(previous_image)
+				if settings.bversion < 3.2 or not tiles:
+					previous_image.scale(2, 2)
+					apply_color(previous_image)
 				if material_load:
 					return previous_image, None			# Not possible Circular Dependency
 				return previous_image, previous_image	# Avoid Circular Dependency: use method A
 		else:
 			if material_load:
+				set_image_as_background(previous_image)
 				set_color_space(color_report, previous_image)
-				#image.generated_width = image.generated_height = 2
-				previous_image.scale(2, 2)
-				apply_color(previous_image)
+				if settings.bversion < 3.2 or not tiles:
+					previous_image.scale(2, 2)
+					apply_color(previous_image)
 				return previous_image, None		# Not possible Circular Dependency
 			image = image_create()
 			return image, previous_image		# Avoid Circular Dependency: use method B
@@ -807,10 +846,20 @@ def setup_image(color_report, mode, name, width, height, image, previous_image, 
 
 
 
-def setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagecopy):
+def setup_image_bake_node(obj, bakeReadyMaterials, image_name, previous_image_name, imagecopy_name):
+	image = bpy.data.images[image_name]
+	if previous_image_name:
+		previous_image = bpy.data.images[previous_image_name]
+	else:
+		previous_image = None
+	if imagecopy_name:
+		imagecopy = bpy.data.images[imagecopy_name]
+	else:
+		imagecopy = None
+
 	if len(obj.data.materials) <= 0:
 		print("ERROR, need spare material to setup active image texture to bake!!!")
-	
+
 	else:
 		def avoid_circular(tree, image):
 			# Avoid Circular Dependency method A
@@ -818,7 +867,7 @@ def setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagec
 				if node.bl_idname == 'ShaderNodeTexImage':
 					if node.image == image:
 						node.image = imagecopy
-		
+
 		def assign_node(tree):
 			# Assign bake node
 			node = None
@@ -833,7 +882,7 @@ def setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagec
 
 		for slot in obj.material_slots:
 			if slot.material:
-				if slot.material not in bakeReadyMaterials:
+				if slot.material.name not in bakeReadyMaterials:
 					if image == previous_image:
 						if slot.material.use_nodes == False:
 							# No need to Avoid Circular Dependency
@@ -849,7 +898,7 @@ def setup_image_bake_node(obj, bakeReadyMaterials, image, previous_image, imagec
 							slot.material.use_nodes = True
 						assign_node(slot.material.node_tree)
 					
-					bakeReadyMaterials.append(slot.material)
+					bakeReadyMaterials.append(slot.material.name)
 
 
 
@@ -907,7 +956,8 @@ def channel_ignore(channel, material):
 
 
 
-def setup_material_loaded(mode, material_bake):
+def setup_material_loaded(mode, name):
+	material_bake = bpy.data.materials[name]
 	if mode == 'wireframe':
 		if "Value" in material_bake.node_tree.nodes:
 			material_bake.node_tree.nodes["Value"].outputs[0].default_value = bpy.context.scene.texToolsSettings.bake_wireframe_size
@@ -940,16 +990,16 @@ def get_material(mode):
 
 	# Find or load material
 	name = modes[mode].material
-	path = os.path.join(os.path.dirname(__file__), "resources/materials.blend")+"\\Material\\"
+	path = os.path.join(os.path.dirname(__file__), "resources/materials.blend", "Material")
 	if "bevel" in mode or "thickness" in mode:
-		path = os.path.join(os.path.dirname(__file__), "resources/materials_2.80.blend")+"\\Material\\"
+		path = os.path.join(os.path.dirname(__file__), "resources/materials_2.80.blend", "Material")
 	#print("Get material {}\n{}".format(mode, path))
 
 	if bpy.data.materials.get(name) is None:
 		#print("Material not yet loaded: "+mode)
 		bpy.ops.wm.append(filename=name, directory=path, link=False, autoselect=False)
 
-	return bpy.data.materials.get(name)
+	return name
 
 
 
@@ -1048,6 +1098,3 @@ def cycles_bake(mode, padding, sampling_scale, samples, cage_extrusion, ray_dist
 					use_cage=True, 
 					cage_object=obj_cage.name
 				)
-
-
-bpy.utils.register_class(op)

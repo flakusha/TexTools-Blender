@@ -12,16 +12,17 @@ from . import utilities_uv
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_randomize"
 	bl_label = "Randomize Position"
-	bl_description = "Randomize UV Islands/Faces Position and/or Rotation"
+	bl_description = "Randomize selected UV faces position and/or rotation"
 	bl_options = {'REGISTER', 'UNDO'}
 	
-	bool_face: bpy.props.BoolProperty(name="Per Face", default=False)
-	strengh_U: bpy.props.FloatProperty(name="U Strengh", default=1, min=-10, max=10, soft_min=0, soft_max=1)
-	strengh_V: bpy.props.FloatProperty(name="V Strengh", default=1, min=-10, max=10, soft_min=0, soft_max=1)
-	rotation: bpy.props.FloatProperty(name="Rotation Strengh", default=0, min=-10, max=10, soft_min=0, soft_max=1)
-	bool_precenter: bpy.props.BoolProperty(name="Pre Center Faces/Islands", default=False, description="Collect all faces/islands around the center of the UV space.")
-	bool_bounds: bpy.props.BoolProperty(name="Within Image Bounds", default=False, description="Keep the UV faces/islands within the 0-1 UV domain.")
-	rand_seed: bpy.props.IntProperty(name="Seed", default=0)
+	bool_face : bpy.props.BoolProperty(name="Per Face", default=False)
+	intmode : bpy.props.BoolProperty(name="Int mode", default=False)
+	strengh_U : bpy.props.FloatProperty(name="U Strengh", default=1, min=-10, max=10, soft_min=0, soft_max=1)
+	strengh_V : bpy.props.FloatProperty(name="V Strengh", default=1, min=-10, max=10, soft_min=0, soft_max=1)
+	rotation : bpy.props.FloatProperty(name="Rotation Strengh", default=0, min=-10, max=10, soft_min=0, soft_max=1)
+	bool_precenter : bpy.props.BoolProperty(name="Pre Center Faces/Islands", default=False, description="Collect all faces/islands around the center of the UV space.")
+	bool_bounds : bpy.props.BoolProperty(name="Within Image Bounds", default=False, description="Keep the UV faces/islands within the 0-1 UV domain.")
+	rand_seed : bpy.props.IntProperty(name="Seed", default=0)
 
 	@classmethod
 	def poll(cls, context):
@@ -34,8 +35,6 @@ class op(bpy.types.Operator):
 		if bpy.context.active_object.mode != 'EDIT':
 			return False
 		if not bpy.context.object.data.uv_layers:
-			return False
-		if bpy.context.scene.tool_settings.use_uv_select_sync:
 			return False
 		return True
 
@@ -60,17 +59,21 @@ def main(self, context, udim_tile=1001, column=0, row=0, ob_num=0):
 	me = bpy.context.active_object.data
 	bm = bmesh.from_edit_mesh(me)
 	uv_layers = bm.loops.layers.uv.verify()
+	sync = bpy.context.scene.tool_settings.use_uv_select_sync
 
-	pregroup = utilities_uv.get_selected_uv_faces(bm, uv_layers)
+	if sync:
+		pregroup = {f for f in bm.faces if f.select}
+	else:
+		pregroup = {f for f in bm.faces if all([l[uv_layers].select for l in f.loops]) and f.select}
 	if not pregroup:
 		return
 
 	random.seed(self.rand_seed + ob_num)
 
 	if not self.bool_face:
-		group = utilities_uv.getSelectionIslands(bm, uv_layers, pregroup)	#list of sets
+		group = utilities_uv.get_selected_islands(bm, uv_layers)
 	else:
-		group = pregroup	#list
+		group = pregroup
 
 
 	for f in group:
@@ -112,8 +115,8 @@ def main(self, context, udim_tile=1001, column=0, row=0, ob_num=0):
 
 
 		if self.bool_bounds:
-			boundsMin = Vector((99999999.0,99999999.0))
-			boundsMax = Vector((-99999999.0,-99999999.0))
+			boundsMin = Vector((math.inf, math.inf))
+			boundsMax = Vector((-math.inf, -math.inf))
 
 			if not self.bool_face:
 				for i in f:
@@ -132,28 +135,32 @@ def main(self, context, udim_tile=1001, column=0, row=0, ob_num=0):
 			move = Vector((self.strengh_U, self.strengh_V))
 
 
+		randmove = rand_v * move
+		if self.intmode:
+			randmove = Vector(np.around(randmove))
+
 		if (not self.bool_bounds and not self.bool_precenter) or udim_tile == 1001:
 			if move.x or move.y:
 				if not self.bool_face:
 					for i in f:
 						for loop in i.loops:
-							loop[uv_layers].uv += rand_v*move
+							loop[uv_layers].uv += randmove
 				else:
 					for loop in f.loops:
-						loop[uv_layers].uv += rand_v*move
+						loop[uv_layers].uv += randmove
 		else:
 			if move.x or move.y:
 				if not self.bool_face:
 					for i in f:
 						for loop in i.loops:
-							loop[uv_layers].uv += rand_v*move + Vector((column, row))
+							loop[uv_layers].uv += randmove + Vector((column, row))
 				else:
 					for loop in f.loops:
-						loop[uv_layers].uv += rand_v*move + Vector((column, row))
+						loop[uv_layers].uv += randmove + Vector((column, row))
+
+	bmesh.update_edit_mesh(me, loop_triangles=False)
 
 	# Workaround for selection not flushing properly from loops to EDGE Selection Mode, apparently since UV edge selection support was added to the UV space
-	bpy.ops.uv.select_mode(type='VERTEX')
-	bpy.context.scene.tool_settings.uv_select_mode = selection_mode
-
-
-bpy.utils.register_class(op)
+	if not sync:
+		bpy.ops.uv.select_mode(type='VERTEX')
+		bpy.context.scene.tool_settings.uv_select_mode = selection_mode

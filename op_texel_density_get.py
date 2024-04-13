@@ -44,7 +44,7 @@ class op(bpy.types.Operator):
 			sum_area_vt += area_pair[1]
 
 		if sum_area_uv != 0 and sum_area_vt != 0:
-			bpy.context.scene.texToolsSettings.texel_density = sum_area_uv / sum_area_vt
+			bpy.context.scene.texToolsSettings.texel_density = (sum_area_uv / sum_area_vt) * bpy.context.preferences.addons[__package__].preferences.texel_density_scale
 
 		if not edit_mode:
 			bpy.ops.object.mode_set(mode='OBJECT')
@@ -135,6 +135,3 @@ def get_texel_density(self, context, edit_mode, getmode):
 			area_vt_sq += math.sqrt( area_vt )
 
 	return [area_uv_sq, area_vt_sq]
-
-
-bpy.utils.register_class(op)

@@ -8,7 +8,7 @@ from . import utilities_uv
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_select_islands_overlap"
 	bl_label = "Select outline"
-	bl_description = "Select all overlapping UV islands"
+	bl_description = "Select all overlapping UV islands but one"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	@classmethod
@@ -23,15 +23,13 @@ class op(bpy.types.Operator):
 			return False
 		if not bpy.context.object.data.uv_layers:
 			return False
-		if bpy.context.scene.tool_settings.use_uv_select_sync:
-			return False
 		return True
 
 
 	def execute(self, context):
 		bpy.ops.uv.select_overlap()
-		utilities_uv.multi_object_loop(deselect, self, context)
 		bpy.ops.uv.select_linked()
+		utilities_uv.multi_object_loop(deselect, self, context)
 		return {'FINISHED'}
 
 
@@ -39,15 +37,23 @@ class op(bpy.types.Operator):
 def deselect(self, context):
 	bm = bmesh.from_edit_mesh(bpy.context.active_object.data)
 	uv_layers = bm.loops.layers.uv.verify()
+	sync = bpy.context.scene.tool_settings.use_uv_select_sync
+	if sync:
+		selection_mode = tuple(bpy.context.scene.tool_settings.mesh_select_mode)
 
-	islands = utilities_uv.getSelectionIslands(bm, uv_layers)
-	if islands:
-		# location = islands[0][0].loops[0][uv_layers].uv
-		# bpy.ops.uv.select_linked_pick(extend=True, deselect=True, location=location)
-		for face in islands[0]:
-			for loop in face.loops:
-				loop[uv_layers].select = False
+	islands = utilities_uv.get_selected_islands(bm, uv_layers)
+
+	if len(islands) > 1:
+		if sync:
+			bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='FACE')
+			for face in islands[0]:
+				face.select_set(False)
+		else:
+			for face in islands[0]:
+				for loop in face.loops:
+					loop[uv_layers].select = False
+
 		utilities_uv.multi_object_loop_stop = True
 
-
-bpy.utils.register_class(op)
+	if sync:
+		bpy.context.scene.tool_settings.mesh_select_mode = selection_mode

@@ -1,6 +1,5 @@
 import bpy
 import bmesh
-from bpy.types import FaceMap
 import mathutils
 from mathutils import Vector
 import math
@@ -13,9 +12,9 @@ from . import utilities_uv
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_texel_density_set"
 	bl_label = "Set Texel size"
-	bl_description = "Apply texel density by scaling the UV's to match the ratio"
+	bl_description = "Apply to the selected UVs the current texel density by scaling them"
 	bl_options = {'REGISTER', 'UNDO'}
-	
+
 	@classmethod
 	def poll(cls, context):
 		if bpy.context.area.ui_type != 'UV':
@@ -109,7 +108,7 @@ def set_texel_density(self, context, edit_mode, getmode, setmode, density, udim_
 		# Collect groups of faces to scale together
 		if setmode == 'ISLAND':
 			if edit_mode:
-				group_faces = utilities_uv.splittedSelectionByIsland(bm, uv_layers, restore_selected=True)
+				group_faces = utilities_uv.getSelectionIslands(bm, uv_layers)
 			else:
 				group_faces = utilities_uv.getAllIslands(bm, uv_layers)
 		else:	
@@ -167,10 +166,11 @@ def set_texel_density(self, context, edit_mode, getmode, setmode, density, udim_
 			if density > 0 and sum_area_uv > 0 and sum_area_vt > 0:
 				if setmode == 'ISLAND':
 					pre_center /= n_loops
+					#pre_center = Vector((0.5, 0.5))
 				else:
 					if udim_tile != 1001:
 						pre_center = Vector((column, row))
-				scale = density / (sum_area_uv / sum_area_vt)
+				scale = (density / (sum_area_uv / sum_area_vt)) / bpy.context.preferences.addons[__package__].preferences.texel_density_scale
 
 			if scale != 1:
 				if setmode == 'ISLAND' or udim_tile != 1001:
@@ -190,6 +190,3 @@ def set_texel_density(self, context, edit_mode, getmode, setmode, density, udim_
 
 	if is_sync:
 		bpy.context.scene.tool_settings.use_uv_select_sync = True
-
-
-bpy.utils.register_class(op)

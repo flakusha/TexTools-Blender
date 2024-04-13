@@ -9,7 +9,7 @@ class op(bpy.types.Operator):
 	bl_idname = "uv.textools_color_select"
 	bl_label = "Select by Color"
 	bl_description = "Select faces by this color"
-	bl_options = {'REGISTER', 'UNDO'}
+	bl_options = {'UNDO'}
 	
 	index : bpy.props.IntProperty(description="Color Index", default=0)
 
@@ -61,6 +61,3 @@ def select_color(self, context, index):
 
 	#Change View mode
 	utilities_color.update_view_mode()
-
-
-bpy.utils.register_class(op)

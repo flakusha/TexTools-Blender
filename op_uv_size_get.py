@@ -7,7 +7,7 @@ from . import utilities_texel
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_uv_size_get"
 	bl_label = "Get Size"
-	bl_description = "Get selected object's texture size"
+	bl_description = "Get the selected Object texture size"
 
 	@classmethod
 	def poll(cls, context):
@@ -35,6 +35,3 @@ def get_size(self, context):
 
 	bpy.context.scene.texToolsSettings.size[0] = image.size[0]
 	bpy.context.scene.texToolsSettings.size[1] = image.size[1]
-
-
-bpy.utils.register_class(op)

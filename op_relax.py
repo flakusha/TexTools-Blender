@@ -12,7 +12,7 @@ from . import utilities_uv
 class op(bpy.types.Operator):
 	bl_idname = "uv.textools_relax"
 	bl_label = "Relax"
-	bl_description = "Relax selected UV verts"
+	bl_description = "Relax selected UVs"
 	bl_options = {'REGISTER', 'UNDO'}
 
 	iterations : bpy.props.IntProperty(name="Iterations", min=1, max=10, soft_max=4, default=1, description="Repeat Smooth the specified number of times.")
@@ -38,11 +38,6 @@ class op(bpy.types.Operator):
 		return {'FINISHED'}
 
 
-	def invoke(self, context, event):
-		wm = context.window_manager
-		return wm.invoke_props_dialog(self)
-
-
 
 def relax(self, context):
 	# UV to temporary mesh
@@ -51,12 +46,11 @@ def relax(self, context):
 	obj_name = bpy.context.active_object.name
 
 	bm, uv_layers, faces_by_island = op_meshtex_create.create_uv_mesh(self, context, obj, sk_create=False, bool_scale=False, delete_unselected=False, restore_selected=True)
-
 	if bm == {'CANCELLED'}:
 		return
 
 	temp_obj = bpy.context.active_object
-	temp_obj_data = temp_obj.data
+	temp_obj_data_name = temp_obj.data.name
 
 	bpy.ops.mesh.select_all(action='DESELECT')
 	for face in chain.from_iterable(faces_by_island):
@@ -124,8 +118,5 @@ def relax(self, context):
 				loop[uv_layers].uv = copied_uvs[face_index][i]
 
 	# Remove temporary mesh and restore selection mode altered by meshtex_create
-	bpy.data.meshes.remove(temp_obj_data, do_unlink=True)
+	bpy.data.meshes.remove(bpy.data.meshes[temp_obj_data_name], do_unlink=True)
 	bpy.context.scene.tool_settings.mesh_select_mode = pre_selection_mode
-
-
-bpy.utils.register_class(op)
